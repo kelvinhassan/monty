@@ -1,54 +1,74 @@
 #include "monty.h"
+#include "lists.h"
 
-global initial;
+data_t data = DATA_INIT;
 
 /**
- * main - main function
- * Description: global struct created
- * open and read line by line .m file
- * @ac: argument count
- * @av: argument array
- * Return: 0
+ * monty - helper function for main function
+ * @args: pointer to struct of arguments from main
+ *
+ * Description: opens and reads from the file
+ * containing the opcodes, and calls the function
+ * that will find the corresponding executing function
  */
-int main(int ac, char **av)
+void monty(args_t *args)
 {
-	char *toks = NULL;
-	int tok_cnt = 0;
 	size_t len = 0;
-	instruction_t opcodes[18] = {
-		{"pall", pall}, {"pint", pint}, {"pop", pop}, {"swap", swap},
-		{"add", add}, {"nop", empty}, {"sub", sub}, {"div", _div},
-		{"mul", mul}, {"mod", mod}, {"#", empty}, {"pchar", pchar},
-		{"pstr", pstr}, {"rotr", rotr}, {"rotl", rotl}, {"push", push},
-		{"queue", empty}, {"stack", empty}};
+	int get = 0;
+	void (*code_func)(stack_t **, unsigned int);
 
-	initial.mode = 0;
-	initial.op_code = NULL;
-	initial.number = 0;
-	initial.line_cnt = 1;
-	initial.readed = NULL;
-	initial.head = NULL;
-	initial.monty_file = NULL;
-	if (ac != 2)
+	if (args->ac != 2)
 	{
-		dprintf(2, "USAGE: monty file\n");
+		dprintf(STDERR_FILENO, USAGE);
 		exit(EXIT_FAILURE);
 	}
-	initial.monty_file = fopen(av[1], "r");
-	if (!initial.monty_file)
+	data.fptr = fopen(args->av, "r");
+	if (!data.fptr)
 	{
-		dprintf(2, "Error: Can't open file %s\n", av[1]);
+		dprintf(STDERR_FILENO, FILE_ERROR, args->av);
 		exit(EXIT_FAILURE);
 	}
-	while (getline(&(initial.readed), &len, initial.monty_file) != -1)
+	while (1)
 	{
-		toks = strtok(initial.readed, " \t\n");
-		monty_logic(toks, tok_cnt, &(initial.head), opcodes);
-		initial.line_cnt++;
-		tok_cnt = 0;
+		args->line_number++;
+		get = getline(&(data.line), &len, data.fptr);
+		if (get < 0)
+			break;
+		data.words = strtow(data.line);
+		if (data.words[0] == NULL || data.words[0][0] == '#')
+		{
+			free_all(0);
+			continue;
+		}
+		code_func = get_func(data.words);
+		if (!code_func)
+		{
+			dprintf(STDERR_FILENO, UNKNOWN, args->line_number, data.words[0]);
+			free_all(1);
+			exit(EXIT_FAILURE);
+		}
+		code_func(&(data.stack), args->line_number);
+		free_all(0);
 	}
-	free_dlistint(initial.head);
-	free(initial.readed);
-	fclose(initial.monty_file);
-	return (0);
+	free_all(1);
+}
+
+/**
+ * main - entry point for monty bytecode interpreter
+ * @argc: number of arguments
+ * @argv: array of arguments
+ *
+ * Return: EXIT_SUCCESS or EXIT_FAILURE
+ */
+int main(int argc, char *argv[])
+{
+	args_t args;
+
+	args.av = argv[1];
+	args.ac = argc;
+	args.line_number = 0;
+
+	monty(&args);
+
+	return (EXIT_SUCCESS);
 }
